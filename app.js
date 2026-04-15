@@ -8,10 +8,6 @@ const PORT = process.env.PORT || 5000;
 
 app.use(cors());
 app.use(express.json());
-// app.use("/", (req, res) => {
-//     res.send("Hello World")
-// });
-
 
 app.use('/api/classify', async (req, res) => {
     try {
