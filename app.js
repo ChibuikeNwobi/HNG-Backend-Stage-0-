@@ -16,14 +16,14 @@ app.use('/api/classify', async (req, res) => {
         if (!name || name.trim() === "") {
             return res.status(400).json({
                 status: "error",
-                message: "Bad Request"
+                message: "Bad Request: name query parameter is required and cannot be empty"
             });
         }
 
         if (typeof name !== "string") {
             return res.status(422).json({
                 status: "error",
-                message: "Unprocessable entity"
+                message: "Unprocessable entity: name must be a string"
             });
         }
 
