@@ -1,12 +1,13 @@
 const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
+const databaseConnection = require('./utility/db');
 
 const app = express();
 
 const PORT = process.env.PORT || 5000;
 
-app.use(cors());
+app.use(cors({origin: "*"}));
 app.use(express.json());
 
 app.use('/api/classify', async (req, res) => {
@@ -74,5 +75,6 @@ app.get('/', (req, res) => {
 });
 
 app.listen(PORT, () => {
+    databaseConnection();
     console.log(`Server is live at ${"http://localhost:5000"}`);
 });
