@@ -11,6 +11,35 @@ const ageClassifier = require("../utility/age_classifier");
 const generateUUID_v7 = require("../utility/uuid_generator");
 const AppError = require("../utility/appError");
 
+const axiosWithRetry = async (url, maxRetries = 3) => {
+  let lastError;
+
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      const response = await axios.get(url, { timeout: 5000 });
+      return response.data;
+    } catch (error) {
+      lastError = error;
+
+      // If 429 (Too Many Requests), wait before retrying
+      if (error.response?.status === 429) {
+        const delay = Math.pow(2, i) * 1000; // Exponential backoff: 1s, 2s, 4s
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      } else {
+        throw error; // Don't retry other errors
+      }
+    }
+  }
+
+  throw lastError;
+};
+
+// Then replace axios.get calls:
+  const genderResponse = async () => { await axiosWithRetry(
+    `${Genderize_URL}?name=${encodeURIComponent(name)}`,
+  )};
+
+
 router.post("/", async (req, res, next) => {
   try {
     const { name } = req.body;
@@ -91,9 +120,20 @@ router.post("/", async (req, res, next) => {
       });
     }
 
-    return res.status(200).json({
+    return res.status(201).json({
       status: "success",
-      message: "User profile created successfully",
+      data: {
+        id: newProfile._id,
+        name: newProfile.name,
+        gender: newProfile.gender,
+        gender_probability: newProfile.gender_probability,
+        sample_size: newProfile.sample_size,
+        age: newProfile.age,
+        age_group: newProfile.age_group,
+        country_id: newProfile.country_id,
+        country_probability: newProfile.country_probability,
+        created_at: newProfile.createdAt,
+      },
     });
   } catch (error) {
     next(error);
@@ -105,14 +145,13 @@ router.get("/:id", async (req, res, next) => {
     const { id } = req.params;
     const profile = await UserProfile.findById(id);
 
-    if (!profile) {
-      throw new AppError("User profile not found", 404);
-    }
-
-    return res.status(200).json({
-      status: "success",
-      data: profile,
-    });
+if (profiles.length === 0) {
+  return res.status(200).json({
+    status: "success",
+    count: 0,
+    data: []
+  });
+}
   } catch (error) {
     next(error);
   }
@@ -122,20 +161,30 @@ router.get("/", async (req, res, next) => {
   try {
     const { gender, country_id, age_group } = req.query;
 
-    const profiles = await UserProfile.find({
-      ...(gender && { gender: { $regex: gender, $options: "i" } }),
-      ...(country_id && { country_id: { $regex: country_id, $options: "i" } }),
-      ...(age_group && { age_group: { $regex: age_group, $options: "i" } }),
-    });
-
-    if (!profiles) {
-      throw new AppError("No profiles found matching the criteria", 404);
+    const filter = {};
+    if (gender) {
+      filter.gender = gender.toLowerCase();
     }
+    if (country_id) {
+      filter.country_id = country_id.toUpperCase();
+    }
+    if (age_group) {
+      filter.age_group = age_group.toLowerCase();
+    }
+
+    const profiles = await UserProfile.find(filter);
 
     return res.status(200).json({
       status: "success",
       count: profiles.length,
-      data: profiles,
+      data: profiles.map((p) => ({
+        id: p._id,
+        name: p.name,
+        gender: p.gender,
+        age: p.age,
+        age_group: p.age_group,
+        country_id: p.country_id,
+      })),
     });
   } catch (error) {
     next(error);
@@ -151,10 +200,7 @@ router.delete("/:id", async (req, res, next) => {
       throw new AppError("User profile not found", 404);
     }
 
-    return res.status(204).json({
-      status: "success",
-      message: "User profile deleted successfully",
-    });
+    return res.status(204).send();
   } catch (error) {
     next(error);
   }
