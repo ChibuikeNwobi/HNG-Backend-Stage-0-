@@ -17,7 +17,7 @@ const axiosWithRetry = async (url, maxRetries = 3) => {
   for (let i = 0; i < maxRetries; i++) {
     try {
       const response = await axios.get(url, { timeout: 5000 });
-      return response.data;
+      return response;
     } catch (error) {
       lastError = error;
 
@@ -35,10 +35,9 @@ const axiosWithRetry = async (url, maxRetries = 3) => {
 };
 
 // Then replace axios.get calls:
-  const genderResponse = async () => { await axiosWithRetry(
-    `${Genderize_URL}?name=${encodeURIComponent(name)}`,
-  )};
-
+// const genderResponse = await axiosWithRetry(
+//   `${Genderize_URL}?name=${encodeURIComponent(name)}`
+// );
 
 router.post("/", async (req, res, next) => {
   try {
@@ -63,7 +62,7 @@ router.post("/", async (req, res, next) => {
      * ---------------------- Fetch data from the three external APIs -----------------------
      */
 
-    const genderResponse = await axios.get(
+    const genderResponse = await axiosWithRetry(
       `${Genderize_URL}?name=${encodeURIComponent(name)}`,
     );
     const {
@@ -76,7 +75,7 @@ router.post("/", async (req, res, next) => {
       throw new AppError("Genderize returned an invalid response", 502);
     }
 
-    const ageResponse = await axios.get(
+    const ageResponse = await axiosWithRetry(
       `${Agify_URL}?name=${encodeURIComponent(name)}`,
     );
     const { age } = ageResponse.data;
@@ -86,7 +85,7 @@ router.post("/", async (req, res, next) => {
       throw new AppError("Agify returned an invalid response", 502);
     }
 
-    const nationalityResponse = await axios.get(
+    const nationalityResponse = await axiosWithRetry(
       `${Nationalize_URL}?name=${encodeURIComponent(name)}`,
     );
     const { country } = nationalityResponse.data;
@@ -101,7 +100,7 @@ router.post("/", async (req, res, next) => {
     const existingProfile = await UserProfile.findOne({ name: name });
 
     if (!existingProfile) {
-      await UserProfile.create({
+      const newProfile = await UserProfile.create({
         _id: generateUUID_v7(),
         gender: gender.toLowerCase(),
         gender_probability,
@@ -112,6 +111,23 @@ router.post("/", async (req, res, next) => {
         name: name.toLowerCase(),
         country_probability,
       });
+
+      return res.status(201).json({
+        status: "success",
+        message: "Profile Created Successfully",
+        data: {
+          id: newProfile._id,
+          name: newProfile.name,
+          gender: newProfile.gender,
+          gender_probability: newProfile.gender_probability,
+          sample_size: newProfile.sample_size,
+          age: newProfile.age,
+          age_group: newProfile.age_group,
+          country_id: newProfile.country_id,
+          country_probability: newProfile.country_probability,
+          created_at: newProfile.created_at,
+        },
+      });
     } else {
       return res.status(200).json({
         status: "success",
@@ -119,22 +135,6 @@ router.post("/", async (req, res, next) => {
         data: existingProfile,
       });
     }
-
-    return res.status(201).json({
-      status: "success",
-      data: {
-        id: newProfile._id,
-        name: newProfile.name,
-        gender: newProfile.gender,
-        gender_probability: newProfile.gender_probability,
-        sample_size: newProfile.sample_size,
-        age: newProfile.age,
-        age_group: newProfile.age_group,
-        country_id: newProfile.country_id,
-        country_probability: newProfile.country_probability,
-        created_at: newProfile.createdAt,
-      },
-    });
   } catch (error) {
     next(error);
   }
@@ -145,13 +145,13 @@ router.get("/:id", async (req, res, next) => {
     const { id } = req.params;
     const profile = await UserProfile.findById(id);
 
-if (profiles.length === 0) {
-  return res.status(200).json({
-    status: "success",
-    count: 0,
-    data: []
-  });
-}
+    if (profiles.length === 0) {
+      return res.status(200).json({
+        status: "success",
+        count: 0,
+        data: [],
+      });
+    }
   } catch (error) {
     next(error);
   }
@@ -166,7 +166,7 @@ router.get("/", async (req, res, next) => {
       filter.gender = gender.toLowerCase();
     }
     if (country_id) {
-      filter.country_id = country_id.toUpperCase();
+      filter.country_id = country_id.toLowerCase();
     }
     if (age_group) {
       filter.age_group = age_group.toLowerCase();
