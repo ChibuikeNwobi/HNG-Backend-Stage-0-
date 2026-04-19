@@ -2,6 +2,9 @@ const express = require("express");
 const cors = require("cors");
 const databaseConnection = require("./utility/db");
 const profileRoutes = require("./routes/profileRoutes");
+const dns =  require("node:dns");
+
+dns.setServers(["1.1.1.1", "8.8.8.8"])
 
 const app = express();
 
